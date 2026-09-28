@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+torch
+opencv-python
+Pillow
+PyMuPDF
+pytest
+httpx
