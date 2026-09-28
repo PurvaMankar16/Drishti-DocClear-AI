@@ -1,4 +1,4 @@
-# Python
+# Python caches and test artifacts
 __pycache__/
 *.py[cod]
 *.pyd
@@ -7,16 +7,21 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+*.log
 
-# Virtual environments
+# Local virtual environments
 .venv/
-.venv-ocr/
-backend/.venv-ocr/
+**/.venv/
 venv/
 env/
 ENV/
+backend/.venv-ocr/
+ml/.venv-ml/
+**/.venv-*/
 
-# Node.js / React / Vite
+# Node.js / React / Vite generated files
 node_modules/
 dist/
 build/
@@ -26,41 +31,37 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment and secrets
+# Environment files and secrets
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 
-# User and generated documents
-backend/uploads/*
+# Uploaded and generated document data
+backend/uploads/**
 !backend/uploads/.gitkeep
-backend/processed/*
+backend/processed/**
 !backend/processed/.gitkeep
-backend/processed/*.json
-backend/processed/ocr-input/*
+backend/processed/ocr-input/**
 !backend/processed/ocr-input/.gitkeep
-*.pdf
-*.png
-*.jpg
-*.jpeg
-*.tif
-*.tiff
 
-# Datasets and model artifacts
-ml/datasets/*
+# Datasets and trained model artifacts
+ml/datasets/**
 !ml/datasets/raw/.gitkeep
 !ml/datasets/processed/.gitkeep
 !ml/datasets/splits/.gitkeep
-ml/checkpoints/*
+ml/checkpoints/**
 !ml/checkpoints/.gitkeep
+ml/reports/**
+!ml/reports/.gitkeep
 *.pth
 *.pt
 *.onnx
 *.ckpt
+*.safetensors
 
-# IDE and OS files
+# IDE and operating-system files
 .idea/
 .vscode/
 *.code-workspace
