@@ -8,8 +8,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000
  */
 function AppliedOperations({ operations }) {
   if (!operations?.length) return null;
-  const applied = operations.filter((op) => op.applied);
+
+  // Filter out validation operation for display
+  const applied = operations.filter((op) => op.applied && op.name !== 'validation' && op.name !== 'pdf_processing');
+
   if (!applied.length) return <p className="notice-copy">No enhancement operations were applied.</p>;
+
   return (
     <ul className="applied-ops-list">
       {applied.map((op) => (
@@ -23,9 +27,51 @@ function AppliedOperations({ operations }) {
                 .join(', ')})
             </span>
           )}
+          {op.validation && op.validation.sharpness_improved && (
+            <span className="validation-badge">✓ Validated</span>
+          )}
+          {op.validation && op.validation.contrast_improved && (
+            <span className="validation-badge">✓ Validated</span>
+          )}
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Show validation results if available
+ */
+function ValidationResults({ operations }) {
+  const validationOp = operations?.find(op => op.name === 'validation');
+  if (!validationOp || !validationOp.result) return null;
+
+  const { is_valid, message, details } = validationOp.result;
+
+  return (
+    <div className={`validation-results ${is_valid ? 'valid' : 'rejected'}`}>
+      <h4>{is_valid ? '✓ Enhancement Validated' : '✗ Enhancement Rejected'}</h4>
+      <p>{message}</p>
+      {details && (
+        <div className="validation-details">
+          {details.blur_change_pct !== undefined && (
+            <span className={details.blur_change_pct >= 0 ? 'positive' : 'negative'}>
+              Sharpness: {details.blur_change_pct > 0 ? '+' : ''}{details.blur_change_pct}%
+            </span>
+          )}
+          {details.contrast_change_pct !== undefined && (
+            <span className={details.contrast_change_pct >= 0 ? 'positive' : 'negative'}>
+              Contrast: {details.contrast_change_pct > 0 ? '+' : ''}{details.contrast_change_pct}%
+            </span>
+          )}
+          {details.noise_change_pct !== undefined && (
+            <span className={details.noise_change_pct >= 0 ? 'positive' : 'negative'}>
+              Noise reduction: {details.noise_change_pct > 0 ? '+' : ''}{details.noise_change_pct}%
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -40,14 +86,24 @@ export default function BeforeAfterComparison({ originalFile, result }) {
     () => (originalFile ? URL.createObjectURL(originalFile) : null),
     [originalFile],
   );
-  const enhancedUrl = result?.enhanced_file?.download_url
+
+  // Use preview URL for inline display
+  const previewUrl = result?.enhanced_file?.preview_url
+    ? `${API_BASE_URL}${result.enhanced_file.preview_url}`
+    : null;
+
+  // Use download URL only for the download button
+  const downloadUrl = result?.enhanced_file?.download_url
     ? `${API_BASE_URL}${result.enhanced_file.download_url}`
     : null;
 
   const recommended = result?.final_recommendation === 'recommended';
+  const rejected = result?.status === 'enhancement_rejected';
   const reviewRequired = result?.final_recommendation === 'review_required';
-  const ocrUnavailable = result?.final_recommendation === 'ocr_validation_unavailable';
-  const readability = result?.ocr_validation;
+
+  // Determine file format
+  const isOriginalPdf = originalFile?.type === 'application/pdf';
+  const enhancedFormat = result?.enhanced_quality?.file_type === 'application/pdf' ? 'PDF' : 'Image';
 
   return (
     <section className="comparison-panel">
@@ -57,54 +113,116 @@ export default function BeforeAfterComparison({ originalFile, result }) {
           <p className="eyebrow">Result</p>
           <h2>
             {recommended
-              ? 'Enhanced document ready'
+              ? `Enhanced ${enhancedFormat.toLowerCase()} ready`
+              : rejected
+              ? 'Enhancement rejected — original preserved'
               : reviewRequired
-              ? 'Review recommended — enhancement produced mixed results'
+              ? 'Enhancement completed — review recommended'
               : 'Original document preserved'}
           </h2>
         </div>
-        <p className={recommended ? 'success-copy' : 'notice-copy'}>
+        <p className={recommended ? 'success-copy' : rejected ? 'error-copy' : 'notice-copy'}>
           {recommended
-            ? 'The enhanced derivative improved measured quality and OCR readability was validated.'
+            ? `The enhanced ${enhancedFormat.toLowerCase()} shows measurable quality improvement and is ready for use.`
+            : rejected
+            ? 'Enhancement would have degraded critical quality metrics (sharpness or contrast). Original document is better.'
             : reviewRequired
-            ? 'The quality score improved, but OCR validation did not confirm readability preservation. Review both versions before proceeding.'
-            : ocrUnavailable
-            ? 'OCR validation could not run. The enhanced image was produced but cannot be automatically recommended.'
-            : 'Automatic enhancement could not sufficiently improve this document.'}
+            ? 'Enhancement completed. Review both versions and compare the quality metrics before proceeding.'
+            : 'Automatic enhancement could not sufficiently improve this document. Original quality may be acceptable as-is.'}
         </p>
       </div>
+
+      {/* Validation results */}
+      <ValidationResults operations={result.operations} />
 
       {/* ── side-by-side images ── */}
       <div className="comparison-grid">
         <figure>
           <figcaption>Original · {result.original_quality.overall_score} / 100</figcaption>
-          {originalFile?.type === 'application/pdf' ? (
+          {isOriginalPdf ? (
             <iframe title="Original document" src={originalUrl} />
           ) : (
             <img src={originalUrl} alt="Original document" />
           )}
         </figure>
         <figure>
-          <figcaption>Enhanced · {result.enhanced_quality.overall_score} / 100</figcaption>
-          {recommended ? (
-            <img src={enhancedUrl} alt="Enhanced document" />
+          <figcaption>
+            {recommended ? 'Enhanced' : rejected ? 'Rejected' : 'Enhanced'} · {result.enhanced_quality.overall_score} / 100
+          </figcaption>
+          {recommended && previewUrl ? (
+            enhancedFormat === 'PDF' ? (
+              <iframe title="Enhanced document preview" src={previewUrl} />
+            ) : (
+              <img src={previewUrl} alt="Enhanced document preview" />
+            )
           ) : (
             <div className="unavailable-preview">
-              {reviewRequired || ocrUnavailable
-                ? 'Enhanced image produced but not recommended — download link is unavailable until validation passes.'
-                : 'No enhanced result recommended.'}
+              {rejected
+                ? 'Enhancement rejected. Original is better.'
+                : reviewRequired
+                ? 'Enhanced result not recommended for download.'
+                : 'No enhanced result available.'}
             </div>
           )}
         </figure>
       </div>
 
-      {/* ── improvement numbers ── */}
+      {/* ── improvement numbers with change indicators ── */}
       <div className="improvement-row">
         <span>Measured improvement</span>
-        <strong>
+        <strong className={result.improvement.absolute_score_change >= 0 ? 'positive' : 'negative'}>
           {result.improvement.absolute_score_change > 0 ? '+' : ''}
           {result.improvement.absolute_score_change} points
         </strong>
+      </div>
+
+      {/* ── quality metrics comparison with indicators ── */}
+      <div className="metrics-panel">
+        <p className="eyebrow">Quality metrics</p>
+        <div className="metrics-grid">
+          <div className={result.improvement.sharpness_change < 0 ? 'metric-degraded' : ''}>
+            <span>Sharpness {result.improvement.sharpness_change < -10 ? '⚠️' : result.improvement.sharpness_change > 5 ? '✓' : ''}</span>
+            <strong>
+              {result.before.sharpness.toFixed(1)} → {result.after.sharpness.toFixed(1)}
+              <span className={`change ${result.improvement.sharpness_change >= 0 ? 'positive' : 'negative'}`}>
+                ({result.improvement.sharpness_change > 0 ? '+' : ''}{result.improvement.sharpness_change.toFixed(1)})
+              </span>
+            </strong>
+          </div>
+          <div>
+            <span>Brightness</span>
+            <strong>
+              {Math.round(result.before.brightness)} → {Math.round(result.after.brightness)}
+              <span className={`change ${result.improvement.brightness_change <= 0 ? 'positive' : 'neutral'}`}>
+                ({result.improvement.brightness_change > 0 ? '+' : ''}{Math.round(result.improvement.brightness_change)})
+              </span>
+            </strong>
+          </div>
+          <div className={result.improvement.contrast_change < 0 ? 'metric-degraded' : ''}>
+            <span>Contrast {result.improvement.contrast_change < -10 ? '⚠️' : result.improvement.contrast_change > 5 ? '✓' : ''}</span>
+            <strong>
+              {result.before.contrast.toFixed(1)} → {result.after.contrast.toFixed(1)}
+              <span className={`change ${result.improvement.contrast_change >= 0 ? 'positive' : 'negative'}`}>
+                ({result.improvement.contrast_change > 0 ? '+' : ''}{result.improvement.contrast_change.toFixed(1)})
+              </span>
+            </strong>
+          </div>
+          <div>
+            <span>Noise level {result.improvement.noise_change > 10 ? '✓' : ''}</span>
+            <strong>
+              {result.before.noise.toFixed(1)} → {result.after.noise.toFixed(1)}
+              <span className={`change ${result.improvement.noise_change >= 0 ? 'positive' : 'neutral'}`}>
+                ({result.improvement.noise_change > 0 ? '+' : ''}{result.improvement.noise_change.toFixed(1)})
+              </span>
+            </strong>
+          </div>
+          <div>
+            <span>Skew angle</span>
+            <strong>
+              {result.before.skew.toFixed(1)}° → {result.after.skew.toFixed(1)}°
+            </strong>
+          </div>
+        </div>
       </div>
 
       {/* ── applied operations list ── */}
@@ -113,101 +231,14 @@ export default function BeforeAfterComparison({ originalFile, result }) {
         <AppliedOperations operations={result.operations} />
       </div>
 
-      {/* ── OCR readability panel ── */}
-      <div className="readability-panel">
-        <p className="eyebrow">OCR readability validation</p>
-
-        {readability?.available ? (
-          <>
-            {/* Metrics grid — only when both snapshots exist */}
-            {readability.original && readability.enhanced && (
-              <div className="readability-grid">
-                <div>
-                  <span>Original confidence</span>
-                  <strong>{Math.round(readability.original.confidence * 100)}%</strong>
-                </div>
-                <div>
-                  <span>Enhanced confidence</span>
-                  <strong>{Math.round(readability.enhanced.confidence * 100)}%</strong>
-                </div>
-                <div>
-                  <span>Confidence delta</span>
-                  <strong>
-                    {readability.improvement?.confidence_delta > 0 ? '+' : ''}
-                    {Math.round((readability.improvement?.confidence_delta || 0) * 100)} pts
-                  </strong>
-                </div>
-                <div>
-                  <span>Detected words</span>
-                  <strong>
-                    {readability.original.word_count} → {readability.enhanced.word_count}
-                  </strong>
-                </div>
-                {readability.text_similarity !== null && readability.text_similarity !== undefined && (
-                  <div>
-                    <span>Text preservation</span>
-                    <strong>{Math.round(readability.text_similarity * 100)}%</strong>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Status message */}
-            {readability.status === 'validated' && (
-              <p className="success-copy">
-                OCR validation passed: text readability improved and document content was preserved.
-              </p>
-            )}
-            {readability.status === 'rejected' && (
-              <p className="notice-copy">
-                {readability.content_preservation_warning
-                  ? 'OCR validation failed: enhancement altered detected text or reduced content similarity below the safe threshold.'
-                  : 'OCR validation failed: enhancement degraded readability or reduced the amount of recognised text.'}
-              </p>
-            )}
-            {readability.status === 'inconclusive' && (
-              <p className="notice-copy">
-                OCR validation was inconclusive: too little text was recognised in either version to
-                measure a reliable readability change. This is normal for dense handwriting. Review
-                the images visually before deciding.
-              </p>
-            )}
-            {readability.error && (
-              <p className="notice-copy">{readability.error}</p>
-            )}
-
-            {/* Detected text details */}
-            <details>
-              <summary>View detected text</summary>
-              <div className="detected-text">
-                <p>
-                  <strong>Original:</strong>{' '}
-                  {readability.original_text || 'No text detected.'}
-                </p>
-                <p>
-                  <strong>Enhanced:</strong>{' '}
-                  {readability.enhanced_text || 'No text detected.'}
-                </p>
-              </div>
-            </details>
-          </>
-        ) : (
-          <p className="notice-copy">
-            {readability?.error
-              ? `OCR validation could not run: ${readability.error}`
-              : 'OCR validation is unavailable. Enhancement cannot be automatically recommended until the OCR runtime is set up.'}
-          </p>
-        )}
-      </div>
-
       {/* ── download link (recommended only) ── */}
-      {recommended && (
+      {recommended && downloadUrl && (
         <a
           className="download-link"
-          href={enhancedUrl}
+          href={downloadUrl}
           download={result.enhanced_file.filename}
         >
-          Download enhanced document
+          Download Enhanced {enhancedFormat}
         </a>
       )}
 

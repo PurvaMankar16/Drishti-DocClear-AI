@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { analyzeDocument, enhanceDocument } from '../services/documentApi';
+import { analyzeDocument, enhanceDocument, detectLayout } from '../services/documentApi';
 import BeforeAfterComparison from '../components/BeforeAfterComparison';
+import LayoutDetectionDisplay from '../components/LayoutDetectionDisplay';
 
 const ACCEPTED_TYPES = '.jpg,.jpeg,.png,.pdf';
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -75,6 +76,8 @@ export default function DocumentUpload() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [enhancementResult, setEnhancementResult] = useState(null);
   const [enhancementStage, setEnhancementStage] = useState('');
+  const [layoutResult, setLayoutResult] = useState(null);
+  const [isDetectingLayout, setIsDetectingLayout] = useState(false);
 
   function chooseFile(file) {
     setError('');
@@ -112,6 +115,20 @@ export default function DocumentUpload() {
       setError(enhancementError.message);
     } finally {
       setEnhancementStage('');
+    }
+  }
+
+  async function handleLayoutDetection() {
+    if (!report) return;
+    setError('');
+    setIsDetectingLayout(true);
+    try {
+      const result = await detectLayout(report.document_id);
+      setLayoutResult(result);
+    } catch (layoutError) {
+      setError(layoutError.message);
+    } finally {
+      setIsDetectingLayout(false);
     }
   }
 
@@ -190,6 +207,20 @@ export default function DocumentUpload() {
               </>
             )}
           </div>
+
+          <div className="layout-detection-section">
+            <h3>Document Structure Analysis</h3>
+            <p>Detect layout elements like text blocks, tables, figures, headers, and more.</p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={handleLayoutDetection}
+              disabled={isDetectingLayout}
+            >
+              {isDetectingLayout ? 'Detecting Layout…' : 'Detect Document Layout'}
+            </button>
+          </div>
+
           <DefectPredictions predictions={report.defect_predictions} modelAvailable={report.ml_model_available} />
           <div className="metrics-grid">
             <MetricCard label="Blur" value={`${metrics.blur.score}/100 · raw ${metrics.blur.raw_score.toFixed(1)}`} status={metrics.blur.status} />
@@ -200,6 +231,7 @@ export default function DocumentUpload() {
             <MetricCard label="Cropping" value={metrics.cropping.document_detected ? (metrics.cropping.centered ? 'Document centered' : 'Document detected') : 'Document boundary unclear'} status={metrics.cropping.status} />
             <MetricCard label="Resolution" value={`${metrics.resolution.width} × ${metrics.resolution.height} · ${metrics.resolution.megapixels.toFixed(2)} MP`} status={metrics.resolution.status} />
           </div>
+          {layoutResult && <LayoutDetectionDisplay originalFile={selectedFile} layoutResult={layoutResult} documentId={report.document_id} />}
           {enhancementResult && <BeforeAfterComparison originalFile={selectedFile} result={enhancementResult} />}
         </section>
       )}

@@ -3,7 +3,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.quality import QualityReport
-from app.schemas.readability import ReadabilityValidation
 
 
 class EnhancementOperation(BaseModel):
@@ -35,12 +34,16 @@ class ImprovementReport(BaseModel):
 class EnhancedFile(BaseModel):
     available: bool
     download_url: str | None = None
+    preview_url: str | None = None
     filename: str | None = None
 
 
 class EnhancementResponse(BaseModel):
+    """Complete enhancement response for a document."""
     document_id: str
-    status: Literal["enhanced", "enhancement_not_beneficial"]
+    status: Literal["enhanced", "enhancement_not_beneficial", "enhancement_rejected"] = Field(
+        description="Enhancement status: enhanced=accepted, enhancement_rejected=validation failed"
+    )
     original_quality: QualityReport
     enhanced_quality: QualityReport
     before: QualityComparison
@@ -48,5 +51,4 @@ class EnhancementResponse(BaseModel):
     improvement: ImprovementReport
     operations: list[EnhancementOperation]
     enhanced_file: EnhancedFile
-    ocr_validation: ReadabilityValidation
-    final_recommendation: Literal["recommended", "review_required", "ocr_validation_unavailable"]
+    final_recommendation: Literal["recommended", "review_required"]

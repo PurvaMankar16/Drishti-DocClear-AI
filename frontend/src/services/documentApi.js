@@ -26,3 +26,14 @@ export async function enhanceDocument(documentId) {
   }
   return body;
 }
+
+export async function detectLayout(documentId) {
+  const response = await fetch(`${API_BASE_URL}/api/documents/${encodeURIComponent(documentId)}/layout`, {
+    method: 'POST',
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.detail || 'Layout detection failed.');
+  }
+  return body;
+}

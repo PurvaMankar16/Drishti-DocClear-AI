@@ -1,8 +1,8 @@
 """ResNet-18 document-defect inference service.
 
 The checkpoint is trained on Drishti's synthetic six-label dataset. Predictions
-are returned as evidence for the user; they do not replace classical metrics or
-OCR verification.
+are returned as supplementary evidence for the user; they do not replace objective
+image-quality metrics based on classical computer vision techniques.
 """
 from functools import lru_cache
 from pathlib import Path

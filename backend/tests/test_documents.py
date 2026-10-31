@@ -27,18 +27,14 @@ def image_bytes(format_name: str = "JPEG") -> bytes:
     return stream.getvalue()
 
 
-class UnavailableOCR:
-    def recognize(self, image):
-        raise RuntimeError("test OCR unavailable")
-
-
 @pytest.fixture(autouse=True)
 def isolated_storage(tmp_path, monkeypatch):
     import app.api.routes.documents as documents_route
 
     monkeypatch.setattr(documents_route, "UPLOAD_DIR", tmp_path / "uploads")
     monkeypatch.setattr(documents_route, "PROCESSED_DIR", tmp_path / "processed")
-    monkeypatch.setattr(documents_route, "ocr_service", UnavailableOCR())
+    monkeypatch.setattr(documents_route, "ENHANCED_DIR", tmp_path / "processed" / "enhanced")
+    monkeypatch.setattr(documents_route, "REPORTS_DIR", tmp_path / "processed" / "reports")
 
 
 def test_health_endpoint_regression():
